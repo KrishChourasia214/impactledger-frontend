@@ -1,0 +1,652 @@
+# ImpactLedger Backend — API Reference
+
+> **Base URL:** `http://localhost:8080`
+
+## Global Response Wrapper
+
+Every endpoint returns this wrapper:
+
+```json
+{
+  "success": true,
+  "message": "Optional message",   // may be null
+  "data": { /* endpoint-specific payload */ }
+}
+```
+
+On error:
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "data": null
+}
+```
+
+## Authentication
+
+- Uses **JWT Bearer tokens** (stateless, no sessions).
+- Send the token in the `Authorization` header:  
+  `Authorization: Bearer <token>`
+- **Public endpoints** (no token needed): `/api/auth/**`, `/api/search/**`
+- **All other endpoints require authentication.**
+
+---
+
+## 1. Auth (`/api/auth`)  🔓 Public
+
+### 1.1 Register
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/auth/register` |
+| **Content-Type** | `application/json` |
+| **Auth** | ❌ Not required |
+
+**Request Body:**
+
+```json
+{
+  "email": "string",              // ✅ required
+  "password": "string",           // ✅ required
+  "userType": "NGO | CSR_INVESTOR", // ✅ required
+  "phone": "string",              // optional
+
+  // — NGO-specific fields (include when userType = "NGO") —
+  "organizationName": "string",
+  "registrationNumber": "string",
+  "registrationType": ["12A", "80G"],
+  "causeAreas": ["Education", "Healthcare"],
+  "description": "string",
+  "impactNarrative": "string",
+  "geographicFocus": { "states": ["Maharashtra"], "districts": ["Pune"] },
+  "contactInfo": { "address": "...", "website": "..." },
+
+  // — CSR Investor-specific fields (include when userType = "CSR_INVESTOR") —
+  "companyName": "string",
+  "cin": "string",
+  "annualCsrBudget": 5000000.00,
+  "preferredCauseAreas": ["Education", "Health"],
+  "preferredStates": ["Maharashtra", "Karnataka"]
+}
+```
+
+**Response `data`:**
+
+```json
+{
+  "token": "jwt-string",
+  "userType": "NGO",
+  "userId": "uuid",
+  "email": "user@example.com",
+  "name": "Organization Name",
+  "profileId": "uuid",        // ngoId or investorId
+  "verified": false
+}
+```
+
+---
+
+### 1.2 Login
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/auth/login` |
+| **Content-Type** | `application/json` |
+| **Auth** | ❌ Not required |
+
+**Request Body:**
+
+```json
+{
+  "email": "string",      // ✅ required
+  "password": "string"    // ✅ required
+}
+```
+
+**Response `data`:** Same as Register response.
+
+---
+
+### 1.3 Verify OTP
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/auth/verify-otp` |
+| **Content-Type** | `application/json` |
+| **Auth** | ❌ Not required |
+
+**Request Body:**
+
+```json
+{
+  "email": "string",   // ✅ required
+  "otp": "string"      // ✅ required
+}
+```
+
+**Response `data`:** Same as Register response.
+
+---
+
+## 2. NGO (`/api/ngo`)  🔒 Authenticated
+
+### 2.1 Get Profile
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/ngo/profile/{ngoId}` |
+| **Auth** | ✅ Bearer token |
+
+**Path Params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `ngoId` | `UUID` | NGO's unique ID |
+
+**Response `data`:**
+
+```json
+{
+  "ngoId": "uuid",
+  "userId": "uuid",
+  "organizationName": "string",
+  "registrationNumber": "string",
+  "registrationType": ["12A", "80G"],
+  "causeAreas": ["Education"],
+  "description": "string",
+  "impactNarrative": "string",
+  "geographicFocus": { "states": ["Maharashtra"] },
+  "contactInfo": { "address": "..." },
+  "profileCompleteness": 85,
+  "verificationStatus": "VERIFIED",
+  "totalBeneficiaries": 5000,
+  "totalFundingReceived": 2500000.00,
+  "createdAt": "2026-01-15T10:30:00"
+}
+```
+
+---
+
+### 2.2 Update Profile
+
+| | |
+|---|---|
+| **Method** | `PUT` |
+| **URL** | `/api/ngo/profile/{ngoId}` |
+| **Content-Type** | `application/json` |
+| **Auth** | ✅ Bearer token |
+
+**Path Params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `ngoId` | `UUID` | NGO's unique ID |
+
+**Request Body:** (all fields optional — partial updates)
+
+```json
+{
+  "organizationName": "string",
+  "registrationNumber": "string",
+  "registrationType": ["12A", "80G"],
+  "causeAreas": ["Education", "Healthcare"],
+  "description": "string",
+  "impactNarrative": "string",
+  "geographicFocus": { "states": ["Maharashtra"] },
+  "contactInfo": { "address": "..." },
+  "totalBeneficiaries": 5000
+}
+```
+
+**Response `data`:** Same as Get Profile response.
+
+---
+
+### 2.3 Get Projects
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/ngo/{ngoId}/projects` |
+| **Auth** | ✅ Bearer token |
+
+**Path Params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `ngoId` | `UUID` | NGO's unique ID |
+
+**Response `data`:** Array of [ProjectResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ProjectResponse.java#14-34):
+
+```json
+[
+  {
+    "projectId": "uuid",
+    "ngoId": "uuid",
+    "projectName": "string",
+    "description": "string",
+    "causeArea": "Education",
+    "sdgMapping": ["SDG4", "SDG10"],
+    "geographicScope": { "state": "Maharashtra", "district": "Pune" },
+    "fundingRequired": 1000000.00,
+    "fundingReceived": 500000.00,
+    "targetBeneficiaries": 2000,
+    "actualBeneficiaries": 1200,
+    "status": "ACTIVE",
+    "predictedSroi": 3.5,
+    "createdAt": "2026-02-01T12:00:00"
+  }
+]
+```
+
+---
+
+### 2.4 Create Project
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/ngo/projects` |
+| **Content-Type** | `application/json` |
+| **Auth** | ✅ Bearer token |
+
+**Request Body:**
+
+```json
+{
+  "projectName": "string",           // ✅ required
+  "ngoId": "uuid",                   // optional (UUID)
+  "description": "string",
+  "causeArea": "Education",
+  "sdgMapping": ["SDG4", "SDG10"],
+  "geographicScope": { "state": "Maharashtra", "district": "Pune" },
+  "fundingRequired": 1000000.00,
+  "targetBeneficiaries": 2000
+}
+```
+
+**Response `data`:** Single [ProjectResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ProjectResponse.java#14-34) (same structure as above).
+
+---
+
+## 3. Investor (`/api/investor`)  🔒 Authenticated
+
+### 3.1 Get Dashboard
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/investor/dashboard` |
+| **Auth** | ✅ Bearer token (user ID extracted from JWT) |
+
+> No request params needed — the authenticated user's ID is pulled from the JWT token.
+
+**Response `data`:**
+
+```json
+{
+  "totalInvested": 15000000.00,
+  "ngosSupported": 12,
+  "projectsFunded": 8,
+  "beneficiariesReached": 45000,
+  "portfolio": [
+    { "ngoName": "string", "amount": 1000000, "projectName": "string" }
+  ],
+  "recentActivity": [
+    { "type": "FUNDED", "ngoName": "string", "amount": 500000, "date": "2026-03-01" }
+  ],
+  "causeAreaBreakdown": {
+    "Education": 5000000.00,
+    "Healthcare": 3000000.00
+  }
+}
+```
+
+---
+
+### 3.2 Express Interest
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/investor/express-interest` |
+| **Content-Type** | `application/json` |
+| **Auth** | ✅ Bearer token |
+
+**Request Body:**
+
+```json
+{
+  "investorId": "uuid",          // ✅ required
+  "ngoId": "uuid",               // ✅ required
+  "projectId": "uuid",           // optional
+  "message": "string",           // optional
+  "proposedFunding": 500000.00   // optional
+}
+```
+
+**Response `data`:**
+
+```json
+{
+  "interestId": "uuid",
+  "investorId": "uuid",
+  "ngoId": "uuid",
+  "projectId": "uuid",
+  "message": "string",
+  "proposedFunding": 500000.00,
+  "status": "pending",
+  "createdAt": "2026-03-08T15:30:00"
+}
+```
+
+---
+
+## 4. Compliance (`/api/compliance`)  🔒 Authenticated
+
+### 4.1 Upload Receipt
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/compliance/upload-receipt` |
+| **Content-Type** | `multipart/form-data` |
+| **Auth** | ✅ Bearer token |
+
+**Form Data:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| [file](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/controller/NgoController.java#24-29) | `File` | ✅ | Receipt image/PDF |
+| `ngoId` | `UUID` | ✅ | NGO's unique ID |
+| `projectId` | `UUID` | ❌ | Associated project ID |
+
+**Frontend example (FormData):**
+
+```javascript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('ngoId', 'uuid-string');
+formData.append('projectId', 'uuid-string'); // optional
+
+fetch('/api/compliance/upload-receipt', {
+  method: 'POST',
+  headers: { 'Authorization': 'Bearer ' + token },
+  body: formData   // ⚠️ Do NOT set Content-Type manually
+});
+```
+
+**Response `data`:**
+
+```json
+{
+  "receiptId": "uuid",
+  "ngoId": "uuid",
+  "projectId": "uuid",
+  "receiptType": "EXPENSE",
+  "processingStatus": "PROCESSING",
+  "extractedData": { "vendor": "...", "amount": 50000, "date": "2026-03-01" },
+  "aiConfidence": 0.92,
+  "imageUrl": "string",
+  "createdAt": "2026-03-08T15:30:00"
+}
+```
+
+---
+
+### 4.2 Get Receipt Status
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/compliance/receipt/{receiptId}/status` |
+| **Auth** | ✅ Bearer token |
+
+**Path Params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `receiptId` | `UUID` | Receipt's unique ID |
+
+**Response `data`:** Single [ReceiptResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ReceiptResponse.java#13-28) (same as above).
+
+---
+
+### 4.3 Get All Receipts for NGO
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/compliance/receipts?ngoId={uuid}` |
+| **Auth** | ✅ Bearer token |
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `ngoId` | `UUID` | ✅ | NGO's unique ID |
+
+**Response `data`:** Array of [ReceiptResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ReceiptResponse.java#13-28).
+
+---
+
+### 4.4 Generate Form 10BD
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/compliance/generate-form-10bd` |
+| **Content-Type** | `application/json` |
+| **Auth** | ✅ Bearer token |
+
+**Request Body:**
+
+```json
+{
+  "ngoId": "uuid",                    // ✅ required
+  "receiptIds": ["uuid1", "uuid2"],   // ✅ required (array of UUIDs)
+  "financialYear": "2025-26"          // optional
+}
+```
+
+**Response `data`:**
+
+```json
+{
+  "formId": "uuid",
+  "ngoId": "uuid",
+  "formType": "FORM_10BD",
+  "financialYear": "2025-26",
+  "receiptIds": ["uuid1", "uuid2"],
+  "generatedData": { /* structured form data */ },
+  "downloadUrl": "string",
+  "status": "GENERATED",
+  "createdAt": "2026-03-08T15:30:00"
+}
+```
+
+---
+
+### 4.5 Get All Forms for NGO
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/compliance/forms?ngoId={uuid}` |
+| **Auth** | ✅ Bearer token |
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `ngoId` | `UUID` | ✅ | NGO's unique ID |
+
+**Response `data`:** Array of [ComplianceFormResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ComplianceFormResponse.java#13-28).
+
+---
+
+### 4.6 Get Form Preview
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/compliance/form/{formId}/preview` |
+| **Auth** | ✅ Bearer token |
+
+**Path Params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `formId` | `UUID` | Form's unique ID |
+
+**Response `data`:** Single [ComplianceFormResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/ComplianceFormResponse.java#13-28).
+
+---
+
+## 5. Search (`/api/search`)  🔓 Public
+
+### 5.1 Semantic Search
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/search/semantic` |
+| **Content-Type** | `application/json` |
+| **Auth** | ❌ Not required |
+
+**Request Body:**
+
+```json
+{
+  "query": "string",                   // ✅ required
+  "causeAreas": ["Education"],         // optional — filter by cause areas
+  "states": ["Maharashtra"],           // optional — filter by states
+  "limit": 20                          // optional — default 20
+}
+```
+
+**Response `data`:** Array of [SearchResultResponse](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/model/dto/response/SearchResultResponse.java#13-29):
+
+```json
+[
+  {
+    "ngoId": "uuid",
+    "organizationName": "string",
+    "description": "string",
+    "impactNarrative": "string",
+    "causeAreas": ["Education"],
+    "geographicFocus": { "states": ["Maharashtra"] },
+    "verificationStatus": "VERIFIED",
+    "totalBeneficiaries": 5000,
+    "totalFundingReceived": 2500000.00,
+    "similarityScore": 0.89
+  }
+]
+```
+
+---
+
+## 6. Voice (`/api/voice`)  🔒 Authenticated
+
+### 6.1 Transcribe Audio
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/voice/transcribe` |
+| **Content-Type** | `multipart/form-data` |
+| **Auth** | ✅ Bearer token |
+
+**Form Data:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| [file](file:///c:/Users/krish/impactledger-backend/impactledger-backend/src/main/java/com/impactledger/backend/controller/NgoController.java#24-29) | `File` | ✅ | Audio file |
+| `languageCode` | `String` | ❌ | e.g. `"hi-IN"`, `"en-US"` |
+
+**Frontend example:**
+
+```javascript
+const formData = new FormData();
+formData.append('file', audioBlob, 'recording.webm');
+formData.append('languageCode', 'hi-IN'); // optional
+
+fetch('/api/voice/transcribe', {
+  method: 'POST',
+  headers: { 'Authorization': 'Bearer ' + token },
+  body: formData
+});
+```
+
+**Response `data`:**
+
+```json
+{
+  "transcription": "Full transcribed text",
+  "language": "hi-IN",
+  "structuredData": { "donorName": "...", "amount": 50000 },
+  "audioFeedbackUrl": "url-to-audio-feedback",
+  "feedbackText": "Hindi confirmation text"
+}
+```
+
+---
+
+### 6.2 Synthesize Speech
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/voice/synthesize` |
+| **Content-Type** | `application/json` |
+| **Auth** | ✅ Bearer token |
+
+**Request Body:**
+
+```json
+{
+  "text": "string",                // ✅ required
+  "languageCode": "hi-IN"         // optional — default "hi-IN"
+}
+```
+
+**Response `data`:**
+
+```json
+{
+  "audioUrl": "url-to-generated-audio"
+}
+```
+
+---
+
+## Quick Reference Table
+
+| # | Method | Endpoint | Auth | Content-Type |
+|---|---|---|---|---|
+| 1 | `POST` | `/api/auth/register` | ❌ | `application/json` |
+| 2 | `POST` | `/api/auth/login` | ❌ | `application/json` |
+| 3 | `POST` | `/api/auth/verify-otp` | ❌ | `application/json` |
+| 4 | `GET` | `/api/ngo/profile/{ngoId}` | ✅ | — |
+| 5 | `PUT` | `/api/ngo/profile/{ngoId}` | ✅ | `application/json` |
+| 6 | `GET` | `/api/ngo/{ngoId}/projects` | ✅ | — |
+| 7 | `POST` | `/api/ngo/projects` | ✅ | `application/json` |
+| 8 | `GET` | `/api/investor/dashboard` | ✅ | — |
+| 9 | `POST` | `/api/investor/express-interest` | ✅ | `application/json` |
+| 10 | `POST` | `/api/compliance/upload-receipt` | ✅ | `multipart/form-data` |
+| 11 | `GET` | `/api/compliance/receipt/{receiptId}/status` | ✅ | — |
+| 12 | `GET` | `/api/compliance/receipts?ngoId=` | ✅ | — |
+| 13 | `POST` | `/api/compliance/generate-form-10bd` | ✅ | `application/json` |
+| 14 | `GET` | `/api/compliance/forms?ngoId=` | ✅ | — |
+| 15 | `GET` | `/api/compliance/form/{formId}/preview` | ✅ | — |
+| 16 | `POST` | `/api/search/semantic` | ❌ | `application/json` |
+| 17 | `POST` | `/api/voice/transcribe` | ✅ | `multipart/form-data` |
+| 18 | `POST` | `/api/voice/synthesize` | ✅ | `application/json` |
+
+> [!TIP]
+> For `multipart/form-data` requests (receipt upload & voice transcribe), do **not** manually set the `Content-Type` header — let the browser set it automatically so the boundary is included.
